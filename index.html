@@ -123,8 +123,9 @@
                 <div id="stokInputContainer" class="hidden grid grid-cols-2 gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
                     <div class="col-span-2">
                         <label id="stokLabel" class="block text-sm font-bold text-amber-900 mb-1">Jumlah Barang Keluar</label>
-                        <input type="text" inputmode="decimal" id="trxStokQty" oninput="formatDecimalInput(this)" placeholder="Misal: 1 atau 0,5" class="w-full px-4 py-2.5 bg-white border border-amber-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 font-bold outline-none">
-                        <p id="stokHelper" class="text-xs text-amber-700 mt-1">Isi 1 untuk 1 Pcs / 1 B. Gunakan titik atau koma untuk desimal.</p>
+                        <input type="text" inputmode="decimal" id="trxStokQty" oninput="handleStokQtyInput(this)" placeholder="Misal: 0.1, 0.5, 1, atau 1.5" class="w-full px-4 py-2.5 bg-white border border-amber-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 font-bold outline-none">
+                        <div id="chipCalcPreview" class="hidden mt-2 px-3 py-1.5 bg-white/80 border border-purple-200 rounded-md text-xs font-semibold text-purple-900 flex items-center justify-between"></div>
+                        <p id="stokHelper" class="text-xs text-amber-700 mt-1">Bisa diisi mulai dari 0.1, 0.2, 0.3, 0.5, 1, hingga 1.5 B dst.</p>
                     </div>
                 </div>
 
@@ -308,7 +309,7 @@
                 <div class="bg-purple-50 p-4 rounded-lg border border-purple-100 shadow-sm">
                     <h3 class="text-sm font-bold text-purple-900 mb-1">2. Stok Awal Chip Game (B)</h3>
                     <p class="text-xs text-purple-700 mb-3 bg-purple-100 p-2 rounded">
-                        <i class="fa-solid fa-circle-info mr-1"></i>Isi kuantitas awal (B). Nilai modal (Rp) dihitung otomatis.
+                        <i class="fa-solid fa-circle-info mr-1"></i>Isi kuantitas awal (B), bisa desimal mulai dari 0.1, 0.2, 0.5, 1, hingga 1.5 B dst. Nilai modal (Rp) dihitung otomatis.
                     </p>
                     <div class="grid grid-cols-2 gap-4" id="configChipContainer"></div>
                 </div>
@@ -442,6 +443,8 @@
             }
         }
 
+        const roundChip = (val) => Math.round((Number(val) || 0) * 10000) / 10000;
+
         function formatDecimalInput(input) {
             const raw = input.value || '';
             if (!raw) {
@@ -472,7 +475,7 @@
                 const intDigits = intRaw.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
                 const intFormatted = intDigits ? intDigits.replace(/\B(?=(\d{3})+(?!\d))/g, '.') : '0';
                 const decDigits = decRaw.replace(/\D/g, '');
-                const sepChar = (intDigits.length >= 4 || hasComma) ? ',' : '.';
+                const sepChar = (intDigits.length >= 4 || hasComma || (intDigits !== '' && decDigits.length === 3)) ? ',' : '.';
                 input.value = intFormatted + sepChar + decDigits;
             } else {
                 input.dataset.decMode = '';
@@ -616,6 +619,47 @@
             toggleStokInput();
         }
 
+        function getActiveChipAccount() {
+            const type = document.getElementById('trxType').value;
+            if (type === 'Bongkar Chip Royal') return accounts.find(a => a.id === 'chip_royal');
+            if (type === 'Bongkar Chip HGI') return accounts.find(a => a.id === 'chip_hgi');
+            const sourceId = document.getElementById('trxSource').value;
+            const acc = accounts.find(a => a.id === sourceId);
+            return (acc && acc.type === 'chip') ? acc : null;
+        }
+
+        function handleStokQtyInput(input) {
+            const chipAcc = getActiveChipAccount();
+            if (chipAcc) {
+                formatDecimalInput(input);
+            } else {
+                input.dataset.decMode = '';
+                formatNumberInput(input);
+            }
+            updateChipPreview();
+        }
+
+        function updateChipPreview() {
+            const preview = document.getElementById('chipCalcPreview');
+            if (!preview) return;
+            const chipAcc = getActiveChipAccount();
+            if (!chipAcc) {
+                preview.classList.add('hidden');
+                preview.innerHTML = '';
+                return;
+            }
+            const qty = roundChip(parseFormattedDecimal(document.getElementById('trxStokQty').value));
+            if (qty <= 0) {
+                preview.classList.add('hidden');
+                preview.innerHTML = '';
+                return;
+            }
+            const totalM = Math.round(qty * 1000);
+            const estModal = Math.round(qty * chipAcc.modal);
+            preview.classList.remove('hidden');
+            preview.innerHTML = `<span><i class="fa-solid fa-coins mr-1 text-purple-600"></i>${qty} B = <b>${formatNumberValue(totalM)} M</b></span><span>Estimasi Modal: <b>${formatRp(estModal)}</b></span>`;
+        }
+
         function toggleStokInput() {
             const type = document.getElementById('trxType').value;
             const sourceId = document.getElementById('trxSource').value;
@@ -632,9 +676,12 @@
                 container.className = "grid grid-cols-2 gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-lg";
                 stokLabel.className = "block text-sm font-bold text-emerald-900 mb-1";
                 stokHelper.className = "text-xs text-emerald-700 mt-1";
+                stokInput.inputMode = "decimal";
+                stokInput.placeholder = "Misal: 0.1, 0.2, 0.5, 1, atau 1.5";
                 stokInput.required = true;
                 stokLabel.innerText = `Jumlah Bongkaran ${chipName} (B) — Stok Bertambah`;
-                stokHelper.innerText = `Isi jumlah ${chipName} yang dibongkar (misal: 1 untuk 1 B, 0.5 untuk 500 M). Stok ${chipName} akan otomatis bertambah.`;
+                stokHelper.innerText = `Bisa mulai dari 0.1 (100 M), 0.2, 0.3, 0.5, 1, hingga 1.5 B dst. Stok ${chipName} otomatis bertambah.`;
+                updateChipPreview();
             } else if (account && (account.type === 'voucher' || account.type === 'chip') && type !== 'Tebus Gadai' && type !== 'Penjualan Barang') {
                 container.classList.remove('hidden');
                 container.className = "grid grid-cols-2 gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg";
@@ -642,12 +689,22 @@
                 stokHelper.className = "text-xs text-amber-700 mt-1";
                 stokInput.required = true;
                 stokLabel.innerText = `Jumlah Keluar (${account.unit})`;
-                stokHelper.innerText = account.type === 'chip' ? "Isi 1 untuk 1 B. Isi 0.5 untuk 500 M." : "Isi lembar voucher (Pcs) yang terjual.";
+                if (account.type === 'chip') {
+                    stokInput.inputMode = "decimal";
+                    stokInput.placeholder = "Misal: 0.1, 0.2, 0.5, 1, atau 1.5";
+                    stokHelper.innerText = "Bisa mulai dari 0.1 (100 M), 0.2, 0.3, 0.5, 1, hingga 1.5 B dst.";
+                } else {
+                    stokInput.inputMode = "numeric";
+                    stokInput.placeholder = "Misal: 1 atau 10";
+                    stokHelper.innerText = "Isi lembar voucher (Pcs) yang terjual.";
+                }
+                updateChipPreview();
             } else {
                 container.classList.add('hidden');
                 stokInput.required = false;
                 stokInput.value = '';
                 stokInput.dataset.decMode = '';
+                updateChipPreview();
             }
         }
 
@@ -760,7 +817,7 @@
             config.shift = document.getElementById('configShift').value;
             accounts.forEach(acc => {
                 const rawVal = document.getElementById(`init_${acc.id}`).value;
-                const val = acc.type === 'chip' ? parseFormattedDecimal(rawVal) : parseFormattedNumber(rawVal);
+                const val = acc.type === 'chip' ? roundChip(parseFormattedDecimal(rawVal)) : parseFormattedNumber(rawVal);
                 config.saldo[acc.id] = isNaN(val) ? 0 : val;
             });
             localStorage.setItem('brilink_config_v15', JSON.stringify(config));
@@ -785,7 +842,7 @@
             const isBongkarChip = (trxType === 'Bongkar Chip Royal' || trxType === 'Bongkar Chip HGI');
             if (isBongkarChip) {
                 if (sourceObj.type !== 'uang') return showToast("Harap pilih Sumber Dana Pembayaran (Kas Laci / Rekening)!", true);
-                const qtyBongkar = parseFormattedDecimal(document.getElementById('trxStokQty').value);
+                const qtyBongkar = roundChip(parseFormattedDecimal(document.getElementById('trxStokQty').value));
                 if (qtyBongkar <= 0) return showToast("Harap isi Jumlah Bongkaran Chip (B)!", true);
             }
 
@@ -813,7 +870,7 @@
                 trx.targetChipId = chipId;
                 trx.targetChipName = chipObj ? chipObj.name : (trxType === 'Bongkar Chip Royal' ? 'Chip Royal' : 'Chip HGI');
                 trx.unit = 'B';
-                trx.qty = parseFormattedDecimal(document.getElementById('trxStokQty').value);
+                trx.qty = roundChip(parseFormattedDecimal(document.getElementById('trxStokQty').value));
                 trx.biaya = parseFormattedNumber(document.getElementById('trxBiaya').value);
                 trx.fee = parseFormattedNumber(document.getElementById('trxFee').value);
                 trx.paymentMethod = sourceId === 'laci' ? 'Tunai' : 'Transfer';
@@ -841,7 +898,7 @@
                 trx.sourceName = sourceObj.name;
                 trx.sourceType = sourceObj.type;
                 trx.unit = sourceObj.unit || '';
-                trx.qty = parseFormattedDecimal(document.getElementById('trxStokQty').value);
+                trx.qty = roundChip(parseFormattedDecimal(document.getElementById('trxStokQty').value));
                 trx.biaya = parseFormattedNumber(document.getElementById('trxBiaya').value);
                 trx.fee = parseFormattedNumber(document.getElementById('trxFee').value);
                 trx.paymentMethod = paymentMethod;
@@ -857,6 +914,7 @@
             document.getElementById('trxFee').value = '';
             document.getElementById('trxStokQty').value = '';
             document.getElementById('trxStokQty').dataset.decMode = '';
+            updateChipPreview();
             document.getElementById('trxDesc').value = '';
             if (document.getElementById('trxAdminTunai')) document.getElementById('trxAdminTunai').checked = false;
             
@@ -872,7 +930,7 @@
 
                 if (trx.type === 'Bongkar Chip Royal' || trx.type === 'Bongkar Chip HGI') {
                     const chipId = trx.targetChipId || (trx.type === 'Bongkar Chip Royal' ? 'chip_royal' : 'chip_hgi');
-                    if (chipId && current[chipId] !== undefined) current[chipId] += (trx.qty || 0);
+                    if (chipId && current[chipId] !== undefined) current[chipId] = roundChip(current[chipId] + (trx.qty || 0));
                     const netOut = (trx.nominal || 0) - (trx.biaya || 0);
                     if (sId && current[sId] !== undefined) current[sId] -= netOut;
                 } else if (trx.type === 'Terima Gadai') {
@@ -887,8 +945,10 @@
                 } else if (trx.type === 'Biaya Operasional') {
                     if (current['laci'] !== undefined) current['laci'] -= trx.nominal;
                 } else {
-                    if (trx.sourceType === 'voucher' || trx.sourceType === 'chip') {
-                        if (sId && current[sId] !== undefined) current[sId] -= trx.qty;
+                    if (trx.sourceType === 'chip') {
+                        if (sId && current[sId] !== undefined) current[sId] = roundChip(current[sId] - (trx.qty || 0));
+                    } else if (trx.sourceType === 'voucher') {
+                        if (sId && current[sId] !== undefined) current[sId] -= (trx.qty || 0);
                     } else {
                         if (sId && current[sId] !== undefined) current[sId] -= trx.nominal;
                     }
@@ -921,8 +981,9 @@
                 if(acc.type === 'uang') {
                     dashUang.innerHTML += `<div class="bg-white p-3 rounded-xl shadow-sm border-l-4 ${acc.border} border-y border-r border-slate-200"><div class="flex items-center gap-2 mb-2"><i class="fa-solid ${acc.icon} ${acc.color}"></i><p class="text-[10px] font-bold text-slate-500">${acc.name}</p></div><h3 class="text-sm font-bold ${saldo<0?'text-red-600':acc.color}">${formatRp(saldo)}</h3></div>`;
                 } else if(acc.type === 'chip') {
-                    const nilaiModal = saldo * acc.modal;
-                    dashChip.innerHTML += `<div class="bg-white p-3 rounded-xl shadow-sm border-l-4 ${acc.border} border-y border-r border-slate-200"><div class="flex items-center gap-2 mb-1"><i class="fa-solid ${acc.icon} ${acc.color}"></i><p class="text-[10px] font-bold text-slate-500">${acc.name}</p></div><h3 class="text-sm font-bold ${acc.color}">${saldo} B</h3><p class="text-[10px] font-semibold text-slate-600 mt-1 bg-slate-50 p-1 rounded">Modal: ${formatRp(nilaiModal)}</p></div>`;
+                    const cleanSaldo = roundChip(saldo);
+                    const nilaiModal = Math.round(cleanSaldo * acc.modal);
+                    dashChip.innerHTML += `<div class="bg-white p-3 rounded-xl shadow-sm border-l-4 ${acc.border} border-y border-r border-slate-200"><div class="flex items-center gap-2 mb-1"><i class="fa-solid ${acc.icon} ${acc.color}"></i><p class="text-[10px] font-bold text-slate-500">${acc.name}</p></div><h3 class="text-sm font-bold ${acc.color}">${cleanSaldo} B</h3><p class="text-[10px] font-semibold text-slate-600 mt-1 bg-slate-50 p-1 rounded">Modal: ${formatRp(nilaiModal)}</p></div>`;
                 } else {
                     dashVoucher.innerHTML += `<div class="bg-white p-3 rounded-xl shadow-sm border-l-4 ${acc.border} border-y border-r border-slate-200"><div class="flex items-center gap-2 mb-1"><i class="fa-solid ${acc.icon} ${acc.color}"></i><p class="text-[10px] font-bold text-slate-500 truncate">${acc.name}</p></div><h3 class="text-sm font-bold ${acc.color}">${saldo} Pcs</h3></div>`;
                 }
@@ -1035,20 +1096,6 @@
             renderData();
         }
 
-        function fallbackCopyText(text) {
-            let textArea = document.createElement("textarea");
-            textArea.value = text;
-            document.body.appendChild(textArea);
-            textArea.select();
-            try {
-                document.execCommand('copy');
-                showToast("Laporan Berhasil Disalin!");
-            } catch (err) {
-                showToast("Gagal menyalin.", true);
-            }
-            textArea.remove();
-        }
-
         function copyShiftReport() {
             let currentBalances = getCalculatedBalances([...transactions].reverse());
             
@@ -1085,8 +1132,9 @@
             accounts.filter(a => a.type !== 'uang').forEach(acc => {
                 let saldo = currentBalances[acc.id] || 0;
                 if (acc.type === 'chip') {
-                    let modal = saldo * acc.modal;
-                    text += `- ${acc.name}: ${saldo} B (Modal: ${formatRp(modal)})\n`;
+                    let cleanSaldo = roundChip(saldo);
+                    let modal = Math.round(cleanSaldo * acc.modal);
+                    text += `- ${acc.name}: ${cleanSaldo} B (Modal: ${formatRp(modal)})\n`;
                 } else {
                     text += `- ${acc.name}: ${saldo} Pcs\n`;
                 }
@@ -1132,11 +1180,13 @@
             }
 
             if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(text)
-                    .then(() => showToast("Laporan Berhasil Disalin!"))
-                    .catch(() => fallbackCopyText(text));
+                navigator.clipboard.writeText(text).then(() => showToast("Laporan Berhasil Disalin!"));
             } else {
-                fallbackCopyText(text);
+                let textArea = document.createElement("textarea");
+                textArea.value = text; document.body.appendChild(textArea); textArea.select();
+                try { document.execCommand('copy'); showToast("Laporan Berhasil Disalin!"); } 
+                catch (err) { showToast("Gagal menyalin.", true); }
+                textArea.remove();
             }
         }
     </script>
