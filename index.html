@@ -192,14 +192,23 @@
             </div>
             
             <div class="p-5 flex-grow flex flex-col min-h-0 space-y-4 overflow-y-auto">
-                <!-- Bar Filter (Search, Shift, Saldo, Tanggal) -->
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-lg border border-slate-200 shrink-0">
+                <!-- Bar Filter (Search, Kategori Arus/Admin, Shift, Saldo, Tanggal) -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 bg-slate-50 p-4 rounded-lg border border-slate-200 shrink-0">
                     <div>
                         <label class="block text-xs font-semibold text-slate-500 mb-1">Cari Kata Kunci</label>
                         <div class="relative">
                             <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400"><i class="fa-solid fa-search text-xs"></i></span>
                             <input type="text" id="filterSearch" onkeyup="renderData()" placeholder="Nama, ket, nominal..." class="w-full pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-md text-sm focus:ring-1 focus:ring-blue-500 outline-none">
                         </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">Jenis Arus / Admin</label>
+                        <select id="filterFlow" onchange="renderData()" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-sm font-medium text-slate-700 focus:ring-1 focus:ring-blue-500 outline-none">
+                            <option value="">Semua Transaksi</option>
+                            <option value="masuk">Transaksi Uang Masuk</option>
+                            <option value="keluar">Transaksi Uang Keluar</option>
+                            <option value="admin">Admin</option>
+                        </select>
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-slate-500 mb-1">Filter Shift</label>
@@ -223,6 +232,9 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Ringkasan Filter Arus / Admin -->
+                <div id="filterFlowSummary" class="hidden px-4 py-2.5 rounded-lg border text-xs font-semibold flex flex-wrap items-center justify-between gap-2 shrink-0"></div>
                 
                 <!-- Table History (Scrollable) -->
                 <div class="overflow-auto max-h-[350px] border border-slate-200 rounded-lg custom-scroll shrink-0 relative">
@@ -990,6 +1002,7 @@
             });
 
             // Modal Filters
+            let fFlow = document.getElementById('filterFlow') ? document.getElementById('filterFlow').value : '';
             let fShift = document.getElementById('filterShift') ? document.getElementById('filterShift').value : '';
             let fAccount = document.getElementById('filterAccount') ? document.getElementById('filterAccount').value : '';
             let fDate = document.getElementById('filterDate') ? document.getElementById('filterDate').value : '';
@@ -1000,8 +1013,63 @@
                 filteredTrx = filteredTrx.filter(t => t.type.toLowerCase().includes(fSearch) || t.sourceName.toLowerCase().includes(fSearch) || t.receiveName.toLowerCase().includes(fSearch) || t.desc.toLowerCase().includes(fSearch) || t.nominal.toString().includes(fSearch));
             }
             if (fShift) filteredTrx = filteredTrx.filter(t => t.shift === fShift);
-            if (fAccount) filteredTrx = filteredTrx.filter(t => t.sourceId === fAccount || t.receiveId === fAccount || t.targetChipId === fAccount);
+            if (fAccount) {
+                filteredTrx = filteredTrx.filter(t => t.sourceId === fAccount || t.receiveId === fAccount || t.targetChipId === fAccount || (fAccount === 'laci' && t.adminTunai));
+            }
             if (fDate) filteredTrx = filteredTrx.filter(t => t.date === fDate);
+            if (fFlow) {
+                filteredTrx = filteredTrx.filter(t => {
+                    const isBongkarTrx = (t.type === 'Bongkar Chip Royal' || t.type === 'Bongkar Chip HGI');
+                    if (fFlow === 'masuk') {
+                        if (isBongkarTrx || t.type === 'Terima Gadai' || t.type === 'Biaya Operasional') return false;
+                        if (fAccount) {
+                            return t.receiveId === fAccount || (fAccount === 'laci' && t.adminTunai && (t.biaya || 0) > 0);
+                        }
+                        return !!t.receiveId;
+                    } else if (fFlow === 'keluar') {
+                        if (fAccount) {
+                            return t.sourceId === fAccount && t.sourceType === 'uang';
+                        }
+                        return !!t.sourceId && t.sourceType === 'uang';
+                    } else if (fFlow === 'admin') {
+                        return (t.biaya || 0) > 0 || (t.fee || 0) > 0 || !!t.adminTunai || t.type.toLowerCase().includes('admin');
+                    }
+                    return true;
+                });
+            }
+
+            const flowSummaryEl = document.getElementById('filterFlowSummary');
+            if (flowSummaryEl) {
+                if (!fFlow) {
+                    flowSummaryEl.classList.add('hidden');
+                    flowSummaryEl.innerHTML = '';
+                } else {
+                    flowSummaryEl.classList.remove('hidden');
+                    if (fFlow === 'masuk') {
+                        const totalMasukFiltered = filteredTrx.reduce((sum, t) => {
+                            if (fAccount) {
+                                if (t.adminTunai && t.receiveId !== fAccount && fAccount === 'laci') return sum + (t.biaya || 0);
+                                if (t.adminTunai && t.receiveId === fAccount) return sum + (t.nominal || 0);
+                            }
+                            return sum + (t.nominal || 0) + (t.biaya || 0);
+                        }, 0);
+                        flowSummaryEl.className = "px-4 py-2.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-900 text-xs font-semibold flex flex-wrap items-center justify-between gap-2 shrink-0";
+                        flowSummaryEl.innerHTML = `<span><i class="fa-solid fa-arrow-down-long mr-1.5 text-emerald-600"></i>Filter: <b>Transaksi Uang Masuk</b> (${filteredTrx.length} transaksi)</span><span>Total Uang Masuk: <b class="text-sm text-emerald-700">${formatRp(totalMasukFiltered)}</b></span>`;
+                    } else if (fFlow === 'keluar') {
+                        const totalKeluarFiltered = filteredTrx.reduce((sum, t) => {
+                            const isBongkarTrx = (t.type === 'Bongkar Chip Royal' || t.type === 'Bongkar Chip HGI');
+                            return sum + (isBongkarTrx ? ((t.nominal || 0) - (t.biaya || 0)) : (t.nominal || 0));
+                        }, 0);
+                        flowSummaryEl.className = "px-4 py-2.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-900 text-xs font-semibold flex flex-wrap items-center justify-between gap-2 shrink-0";
+                        flowSummaryEl.innerHTML = `<span><i class="fa-solid fa-arrow-up-long mr-1.5 text-rose-600"></i>Filter: <b>Transaksi Uang Keluar</b> (${filteredTrx.length} transaksi)</span><span>Total Uang Keluar: <b class="text-sm text-rose-700">${formatRp(totalKeluarFiltered)}</b></span>`;
+                    } else if (fFlow === 'admin') {
+                        const totalAdminBiaya = filteredTrx.reduce((sum, t) => sum + (t.biaya || 0), 0);
+                        const totalAdminFee = filteredTrx.reduce((sum, t) => sum + (t.fee || 0), 0);
+                        flowSummaryEl.className = "px-4 py-2.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-900 text-xs font-semibold flex flex-wrap items-center justify-between gap-2 shrink-0";
+                        flowSummaryEl.innerHTML = `<span><i class="fa-solid fa-tags mr-1.5 text-blue-600"></i>Filter: <b>Admin (Biaya / Laba & Fee)</b> (${filteredTrx.length} transaksi)</span><div class="flex flex-wrap gap-4"><span>Total Biaya/Laba (Admin): <b class="text-sm text-blue-700">${formatRp(totalAdminBiaya)}</b></span><span>Total Fee Bersih: <b class="text-sm text-emerald-700">${formatRp(totalAdminFee)}</b></span></div>`;
+                    }
+                }
+            }
 
             let laciMasuk = 0, laciKeluar = 0, laciBiaya = 0, laciChip = 0;
             const tbody = document.getElementById('tableBody');
@@ -1048,7 +1116,7 @@
                             </td>
                             <td class="p-3"><span class="px-2 py-1 rounded text-[11px] font-bold border ${typeBadgeClass}">${trx.type}</span></td>
                             <td class="p-3"><div class="text-[11px] font-bold">${sourceDisplay}</div><div class="text-[10px] mt-1 bg-slate-200 px-1 inline-block rounded">${paymentDisplay}</div></td>
-                            <td class="p-3 text-right font-bold">${formatRp(trx.nominal)}<div class="text-[10px] font-normal text-slate-500">+ Biaya: ${formatRp(trx.biaya)}</div></td>
+                            <td class="p-3 text-right font-bold">${formatRp(trx.nominal)}<div class="text-[10px] ${trx.biaya > 0 ? 'font-semibold text-blue-600' : 'font-normal text-slate-500'}">+ Biaya/Admin: ${formatRp(trx.biaya)}</div></td>
                             <td class="p-3 text-right font-bold text-emerald-600">+${formatRp(trx.fee)}</td>
                             <td class="p-3 text-center">
                                 <button onclick="deleteTrx(${trx.id})" title="Hapus" class="text-red-400 hover:text-red-600 p-1"><i class="fa-solid fa-trash-can"></i></button>
@@ -1090,6 +1158,7 @@
 
         function resetFilters() {
             if(document.getElementById('filterSearch')) document.getElementById('filterSearch').value = ''; 
+            if(document.getElementById('filterFlow')) document.getElementById('filterFlow').value = ''; 
             if(document.getElementById('filterShift')) document.getElementById('filterShift').value = ''; 
             if(document.getElementById('filterAccount')) document.getElementById('filterAccount').value = ''; 
             if(document.getElementById('filterDate')) document.getElementById('filterDate').value = ''; 
