@@ -202,11 +202,11 @@
                         </div>
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-slate-500 mb-1">Jenis Arus / Admin</label>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">Arus Laci / Admin</label>
                         <select id="filterFlow" onchange="renderData()" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-sm font-medium text-slate-700 focus:ring-1 focus:ring-blue-500 outline-none">
                             <option value="">Semua Transaksi</option>
-                            <option value="masuk">Transaksi Uang Masuk</option>
-                            <option value="keluar">Transaksi Uang Keluar</option>
+                            <option value="masuk_laci">Uang Masuk Laci</option>
+                            <option value="keluar_laci">Keluar Laci</option>
                             <option value="admin">Admin</option>
                         </select>
                     </div>
@@ -1017,20 +1017,28 @@
                 filteredTrx = filteredTrx.filter(t => t.sourceId === fAccount || t.receiveId === fAccount || t.targetChipId === fAccount || (fAccount === 'laci' && t.adminTunai));
             }
             if (fDate) filteredTrx = filteredTrx.filter(t => t.date === fDate);
+            const getUangMasukLaci = (t) => {
+                const isBongkarTrx = (t.type === 'Bongkar Chip Royal' || t.type === 'Bongkar Chip HGI');
+                if (isBongkarTrx || t.type === 'Terima Gadai' || t.type === 'Biaya Operasional') return 0;
+                if (t.receiveId === 'laci') return (t.nominal || 0) + (t.biaya || 0);
+                if (t.adminTunai) return (t.biaya || 0);
+                return 0;
+            };
+
+            const getUangKeluarLaci = (t) => {
+                if (t.sourceId !== 'laci') return 0;
+                const isBongkarTrx = (t.type === 'Bongkar Chip Royal' || t.type === 'Bongkar Chip HGI');
+                return isBongkarTrx ? ((t.nominal || 0) - (t.biaya || 0)) : (t.nominal || 0);
+            };
+
             if (fFlow) {
                 filteredTrx = filteredTrx.filter(t => {
-                    const isBongkarTrx = (t.type === 'Bongkar Chip Royal' || t.type === 'Bongkar Chip HGI');
-                    if (fFlow === 'masuk') {
+                    if (fFlow === 'masuk_laci') {
+                        const isBongkarTrx = (t.type === 'Bongkar Chip Royal' || t.type === 'Bongkar Chip HGI');
                         if (isBongkarTrx || t.type === 'Terima Gadai' || t.type === 'Biaya Operasional') return false;
-                        if (fAccount) {
-                            return t.receiveId === fAccount || (fAccount === 'laci' && t.adminTunai && (t.biaya || 0) > 0);
-                        }
-                        return !!t.receiveId;
-                    } else if (fFlow === 'keluar') {
-                        if (fAccount) {
-                            return t.sourceId === fAccount && t.sourceType === 'uang';
-                        }
-                        return !!t.sourceId && t.sourceType === 'uang';
+                        return t.receiveId === 'laci' || (!!t.adminTunai && (t.biaya || 0) > 0);
+                    } else if (fFlow === 'keluar_laci') {
+                        return t.sourceId === 'laci';
                     } else if (fFlow === 'admin') {
                         return (t.biaya || 0) > 0 || (t.fee || 0) > 0 || !!t.adminTunai || t.type.toLowerCase().includes('admin');
                     }
@@ -1045,23 +1053,14 @@
                     flowSummaryEl.innerHTML = '';
                 } else {
                     flowSummaryEl.classList.remove('hidden');
-                    if (fFlow === 'masuk') {
-                        const totalMasukFiltered = filteredTrx.reduce((sum, t) => {
-                            if (fAccount) {
-                                if (t.adminTunai && t.receiveId !== fAccount && fAccount === 'laci') return sum + (t.biaya || 0);
-                                if (t.adminTunai && t.receiveId === fAccount) return sum + (t.nominal || 0);
-                            }
-                            return sum + (t.nominal || 0) + (t.biaya || 0);
-                        }, 0);
+                    if (fFlow === 'masuk_laci') {
+                        const totalMasukLaciFiltered = filteredTrx.reduce((sum, t) => sum + getUangMasukLaci(t), 0);
                         flowSummaryEl.className = "px-4 py-2.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-900 text-xs font-semibold flex flex-wrap items-center justify-between gap-2 shrink-0";
-                        flowSummaryEl.innerHTML = `<span><i class="fa-solid fa-arrow-down-long mr-1.5 text-emerald-600"></i>Filter: <b>Transaksi Uang Masuk</b> (${filteredTrx.length} transaksi)</span><span>Total Uang Masuk: <b class="text-sm text-emerald-700">${formatRp(totalMasukFiltered)}</b></span>`;
-                    } else if (fFlow === 'keluar') {
-                        const totalKeluarFiltered = filteredTrx.reduce((sum, t) => {
-                            const isBongkarTrx = (t.type === 'Bongkar Chip Royal' || t.type === 'Bongkar Chip HGI');
-                            return sum + (isBongkarTrx ? ((t.nominal || 0) - (t.biaya || 0)) : (t.nominal || 0));
-                        }, 0);
+                        flowSummaryEl.innerHTML = `<span><i class="fa-solid fa-cash-register mr-1.5 text-emerald-600"></i>Filter: <b>Uang Masuk Laci</b> (${filteredTrx.length} transaksi)</span><span>Total Uang Masuk Laci: <b class="text-sm text-emerald-700">${formatRp(totalMasukLaciFiltered)}</b></span>`;
+                    } else if (fFlow === 'keluar_laci') {
+                        const totalKeluarLaciFiltered = filteredTrx.reduce((sum, t) => sum + getUangKeluarLaci(t), 0);
                         flowSummaryEl.className = "px-4 py-2.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-900 text-xs font-semibold flex flex-wrap items-center justify-between gap-2 shrink-0";
-                        flowSummaryEl.innerHTML = `<span><i class="fa-solid fa-arrow-up-long mr-1.5 text-rose-600"></i>Filter: <b>Transaksi Uang Keluar</b> (${filteredTrx.length} transaksi)</span><span>Total Uang Keluar: <b class="text-sm text-rose-700">${formatRp(totalKeluarFiltered)}</b></span>`;
+                        flowSummaryEl.innerHTML = `<span><i class="fa-solid fa-money-bill-transfer mr-1.5 text-rose-600"></i>Filter: <b>Keluar Laci</b> (${filteredTrx.length} transaksi)</span><span>Total Keluar Laci: <b class="text-sm text-rose-700">${formatRp(totalKeluarLaciFiltered)}</b></span>`;
                     } else if (fFlow === 'admin') {
                         const totalAdminBiaya = filteredTrx.reduce((sum, t) => sum + (t.biaya || 0), 0);
                         const totalAdminFee = filteredTrx.reduce((sum, t) => sum + (t.fee || 0), 0);
