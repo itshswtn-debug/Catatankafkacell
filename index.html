@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts Inter -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- SheetJS for Excel (.xlsx) Export -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <style>
         body { font-family: 'Inter', sans-serif; }
         .modal-enter { animation: modalFadeIn 0.2s ease-out forwards; }
@@ -49,6 +51,9 @@
                 </button>
                 <button onclick="toggleModal('configModal')" class="bg-blue-800 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-2 border border-blue-700">
                     <i class="fa-solid fa-gear"></i> Pengaturan
+                </button>
+                <button onclick="exportShiftExcel(false)" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition shadow flex items-center gap-2 border border-emerald-500">
+                    <i class="fa-solid fa-file-excel"></i> Export Excel
                 </button>
                 <button onclick="copyShiftReport()" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition shadow flex items-center gap-2">
                     <i class="fa-brands fa-whatsapp"></i> Salin Laporan
@@ -198,7 +203,10 @@
             <!-- Modal Header -->
             <div class="flex justify-between items-center p-5 border-b shrink-0">
                 <h3 class="text-xl font-bold text-slate-800"><i class="fa-solid fa-list-ul text-blue-600 mr-2"></i>Riwayat Transaksi</h3>
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2 sm:gap-3">
+                    <button onclick="exportShiftExcel(true)" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-md transition font-medium shadow-sm flex items-center gap-1.5">
+                        <i class="fa-solid fa-file-excel"></i> Export Excel
+                    </button>
                     <button onclick="openConfirmClearModal()" class="text-xs text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-md transition font-medium border border-red-200 flex items-center gap-1">
                         <i class="fa-solid fa-trash"></i> Hapus Semua
                     </button>
@@ -1034,6 +1042,53 @@
             return current;
         }
 
+        function getUangMasukLaci(t) {
+            const isBongkarTrx = (t.type === 'Bongkar Chip Royal' || t.type === 'Bongkar Chip HGI');
+            if (isBongkarTrx || t.type === 'Terima Gadai' || t.type === 'Biaya Operasional') return 0;
+            if (t.receiveId === 'laci') return (t.nominal || 0) + (t.biaya || 0);
+            if (t.adminTunai) return (t.biaya || 0);
+            return 0;
+        }
+
+        function getUangKeluarLaci(t) {
+            if (t.sourceId !== 'laci') return 0;
+            const isBongkarTrx = (t.type === 'Bongkar Chip Royal' || t.type === 'Bongkar Chip HGI');
+            return isBongkarTrx ? ((t.nominal || 0) - (t.biaya || 0)) : (t.nominal || 0);
+        }
+
+        function getFilteredTransactions() {
+            let fFlow = document.getElementById('filterFlow') ? document.getElementById('filterFlow').value : '';
+            let fShift = document.getElementById('filterShift') ? document.getElementById('filterShift').value : '';
+            let fAccount = document.getElementById('filterAccount') ? document.getElementById('filterAccount').value : '';
+            let fDate = document.getElementById('filterDate') ? document.getElementById('filterDate').value : '';
+            let fSearch = document.getElementById('filterSearch') ? document.getElementById('filterSearch').value.toLowerCase().trim() : '';
+
+            let filteredTrx = transactions;
+            if (fSearch) {
+                filteredTrx = filteredTrx.filter(t => t.type.toLowerCase().includes(fSearch) || t.sourceName.toLowerCase().includes(fSearch) || t.receiveName.toLowerCase().includes(fSearch) || t.desc.toLowerCase().includes(fSearch) || t.nominal.toString().includes(fSearch));
+            }
+            if (fShift) filteredTrx = filteredTrx.filter(t => t.shift === fShift);
+            if (fAccount) {
+                filteredTrx = filteredTrx.filter(t => t.sourceId === fAccount || t.receiveId === fAccount || t.targetChipId === fAccount || (fAccount === 'laci' && t.adminTunai));
+            }
+            if (fDate) filteredTrx = filteredTrx.filter(t => t.date === fDate);
+            if (fFlow) {
+                filteredTrx = filteredTrx.filter(t => {
+                    if (fFlow === 'masuk_laci') {
+                        const isBongkarTrx = (t.type === 'Bongkar Chip Royal' || t.type === 'Bongkar Chip HGI');
+                        if (isBongkarTrx || t.type === 'Terima Gadai' || t.type === 'Biaya Operasional') return false;
+                        return t.receiveId === 'laci' || (!!t.adminTunai && (t.biaya || 0) > 0);
+                    } else if (fFlow === 'keluar_laci') {
+                        return t.sourceId === 'laci';
+                    } else if (fFlow === 'admin') {
+                        return (t.biaya || 0) > 0 || (t.fee || 0) > 0 || !!t.adminTunai || t.type.toLowerCase().includes('admin');
+                    }
+                    return true;
+                });
+            }
+            return filteredTrx;
+        }
+
         function renderData() {
             let currentBalances = getCalculatedBalances([...transactions].reverse());
             let totalProfit = 0;
@@ -1061,48 +1116,7 @@
 
             // Modal Filters
             let fFlow = document.getElementById('filterFlow') ? document.getElementById('filterFlow').value : '';
-            let fShift = document.getElementById('filterShift') ? document.getElementById('filterShift').value : '';
-            let fAccount = document.getElementById('filterAccount') ? document.getElementById('filterAccount').value : '';
-            let fDate = document.getElementById('filterDate') ? document.getElementById('filterDate').value : '';
-            let fSearch = document.getElementById('filterSearch') ? document.getElementById('filterSearch').value.toLowerCase().trim() : '';
-            
-            let filteredTrx = transactions;
-            if (fSearch) {
-                filteredTrx = filteredTrx.filter(t => t.type.toLowerCase().includes(fSearch) || t.sourceName.toLowerCase().includes(fSearch) || t.receiveName.toLowerCase().includes(fSearch) || t.desc.toLowerCase().includes(fSearch) || t.nominal.toString().includes(fSearch));
-            }
-            if (fShift) filteredTrx = filteredTrx.filter(t => t.shift === fShift);
-            if (fAccount) {
-                filteredTrx = filteredTrx.filter(t => t.sourceId === fAccount || t.receiveId === fAccount || t.targetChipId === fAccount || (fAccount === 'laci' && t.adminTunai));
-            }
-            if (fDate) filteredTrx = filteredTrx.filter(t => t.date === fDate);
-            const getUangMasukLaci = (t) => {
-                const isBongkarTrx = (t.type === 'Bongkar Chip Royal' || t.type === 'Bongkar Chip HGI');
-                if (isBongkarTrx || t.type === 'Terima Gadai' || t.type === 'Biaya Operasional') return 0;
-                if (t.receiveId === 'laci') return (t.nominal || 0) + (t.biaya || 0);
-                if (t.adminTunai) return (t.biaya || 0);
-                return 0;
-            };
-
-            const getUangKeluarLaci = (t) => {
-                if (t.sourceId !== 'laci') return 0;
-                const isBongkarTrx = (t.type === 'Bongkar Chip Royal' || t.type === 'Bongkar Chip HGI');
-                return isBongkarTrx ? ((t.nominal || 0) - (t.biaya || 0)) : (t.nominal || 0);
-            };
-
-            if (fFlow) {
-                filteredTrx = filteredTrx.filter(t => {
-                    if (fFlow === 'masuk_laci') {
-                        const isBongkarTrx = (t.type === 'Bongkar Chip Royal' || t.type === 'Bongkar Chip HGI');
-                        if (isBongkarTrx || t.type === 'Terima Gadai' || t.type === 'Biaya Operasional') return false;
-                        return t.receiveId === 'laci' || (!!t.adminTunai && (t.biaya || 0) > 0);
-                    } else if (fFlow === 'keluar_laci') {
-                        return t.sourceId === 'laci';
-                    } else if (fFlow === 'admin') {
-                        return (t.biaya || 0) > 0 || (t.fee || 0) > 0 || !!t.adminTunai || t.type.toLowerCase().includes('admin');
-                    }
-                    return true;
-                });
-            }
+            let filteredTrx = getFilteredTransactions();
 
             const flowSummaryEl = document.getElementById('filterFlowSummary');
             if (flowSummaryEl) {
@@ -1224,6 +1238,261 @@
             if(document.getElementById('filterAccount')) document.getElementById('filterAccount').value = ''; 
             if(document.getElementById('filterDate')) document.getElementById('filterDate').value = ''; 
             renderData();
+        }
+
+        function autoFitSheetColumns(ws, aoa) {
+            if (!aoa || !aoa.length) return;
+            const colWidths = [];
+            aoa.forEach(row => {
+                row.forEach((cell, cIdx) => {
+                    let text = '';
+                    if (cell !== null && cell !== undefined) {
+                        if (typeof cell === 'object' && cell.f) text = 'Rp 999.999.999';
+                        else if (typeof cell === 'number') text = cell.toLocaleString('id-ID');
+                        else text = String(cell);
+                    }
+                    const len = Math.min(Math.max(text.length + 3, 10), 42);
+                    if (!colWidths[cIdx] || len > colWidths[cIdx]) colWidths[cIdx] = len;
+                });
+            });
+            ws['!cols'] = colWidths.map(w => ({ wch: w }));
+        }
+
+        function applyNumFormat(ws, aoa, numCols) {
+            for (let r = 0; r < aoa.length; r++) {
+                numCols.forEach(c => {
+                    const addr = XLSX.utils.encode_cell({ r, c });
+                    if (ws[addr] && (typeof ws[addr].v === 'number' || ws[addr].f)) {
+                        ws[addr].z = '#,##0';
+                    }
+                });
+            }
+        }
+
+        function exportShiftExcel(useCurrentFilter = false) {
+            const targetTrx = useCurrentFilter ? getFilteredTransactions() : transactions;
+            const currentBalances = getCalculatedBalances([...transactions].reverse());
+
+            let laciMasuk = 0, laciKeluar = 0, laciBiaya = 0, laciChip = 0, totalFeeBersih = 0;
+            targetTrx.forEach(trx => {
+                const isBongkar = (trx.type === 'Bongkar Chip Royal' || trx.type === 'Bongkar Chip HGI');
+                totalFeeBersih += (trx.fee || 0);
+                if (isBongkar) {
+                    if (trx.sourceId === 'laci') laciKeluar += ((trx.nominal || 0) - (trx.biaya || 0));
+                } else {
+                    if (trx.sourceId === 'laci') laciKeluar += (trx.nominal || 0);
+                    if (trx.receiveId === 'laci') {
+                        laciBiaya += (trx.biaya || 0);
+                        if (trx.sourceType === 'chip') laciChip += (trx.nominal || 0);
+                        else laciMasuk += (trx.nominal || 0);
+                    } else if (trx.adminTunai) {
+                        laciBiaya += (trx.biaya || 0);
+                    }
+                }
+            });
+
+            const laciAwal = config.saldo['laci'] || 0;
+            const laciAkhir = laciAwal + laciMasuk + laciChip + laciBiaya - laciKeluar;
+            const todayStr = new Date().toISOString().slice(0, 10);
+            const branchName = config.branchName || 'Kafka Cell';
+            const shiftName = config.shift || 'Shift 1';
+
+            // --- SHEET 1: RINGKASAN LAPORAN ---
+            const summaryAoa = [
+                ['LAPORAN SHIFT BRILINK KAFKA CELL'],
+                ['Cabang', branchName],
+                ['Shift', shiftName],
+                ['Tanggal Laporan', todayStr],
+                ['Cakupan Data', useCurrentFilter ? `Sesuai Filter Riwayat (${targetTrx.length} transaksi)` : `Seluruh Transaksi (${targetTrx.length} transaksi)`],
+                [],
+                ['1. SALDO AKHIR KEUANGAN'],
+                ['No', 'Akun / Rekening', 'Saldo Awal (Rp)', 'Saldo Akhir (Rp)']
+            ];
+
+            let totalSaldoAwalUang = 0;
+            let totalSaldoAkhirUang = 0;
+            accounts.filter(a => a.type === 'uang').forEach((acc, idx) => {
+                const awal = config.saldo[acc.id] || 0;
+                const akhir = currentBalances[acc.id] || 0;
+                totalSaldoAwalUang += awal;
+                totalSaldoAkhirUang += akhir;
+                summaryAoa.push([idx + 1, acc.name, awal, akhir]);
+            });
+            summaryAoa.push(['', 'TOTAL SALDO KEUANGAN', totalSaldoAwalUang, totalSaldoAkhirUang]);
+            summaryAoa.push([]);
+
+            summaryAoa.push(['2. SISA STOK CHIP GAME & MODAL']);
+            summaryAoa.push(['No', 'Nama Chip', 'Stok Awal (B)', 'Sisa Stok (B)', 'Modal / B (Rp)', 'Total Nilai Modal (Rp)']);
+            let totalModalChip = 0;
+            accounts.filter(a => a.type === 'chip').forEach((acc, idx) => {
+                const awal = roundChip(config.saldo[acc.id] || 0);
+                const akhir = roundChip(currentBalances[acc.id] || 0);
+                const nilaiModal = Math.round(akhir * acc.modal);
+                totalModalChip += nilaiModal;
+                summaryAoa.push([idx + 1, acc.name, awal, akhir, acc.modal, nilaiModal]);
+            });
+            summaryAoa.push(['', 'TOTAL MODAL CHIP', '', '', '', totalModalChip]);
+            summaryAoa.push([]);
+
+            summaryAoa.push(['3. SISA STOK VOUCHER FISIK (PCS)']);
+            summaryAoa.push(['No', 'Nama Voucher', 'Stok Awal (Pcs)', 'Sisa Stok (Pcs)']);
+            let totalVoucherAwal = 0;
+            let totalVoucherAkhir = 0;
+            accounts.filter(a => a.type === 'voucher').forEach((acc, idx) => {
+                const awal = config.saldo[acc.id] || 0;
+                const akhir = currentBalances[acc.id] || 0;
+                totalVoucherAwal += awal;
+                totalVoucherAkhir += akhir;
+                summaryAoa.push([idx + 1, acc.name, awal, akhir]);
+            });
+            summaryAoa.push(['', 'TOTAL VOUCHER (PCS)', totalVoucherAwal, totalVoucherAkhir]);
+            summaryAoa.push([]);
+
+            summaryAoa.push(['4. RINCIAN ARUS KAS LACI & PROFIT']);
+            summaryAoa.push(['Keterangan', 'Nominal (Rp)']);
+            summaryAoa.push(['Saldo Awal Kas Laci', laciAwal]);
+            summaryAoa.push(['Uang Masuk Tunai (inc. Voucher)', laciMasuk]);
+            summaryAoa.push(['Uang Masuk Tunai Khusus Chip', laciChip]);
+            summaryAoa.push(['Jumlah Biaya / Laba Tunai (inc. Admin Luar)', laciBiaya]);
+            summaryAoa.push(['Uang Keluar Tunai', laciKeluar]);
+            summaryAoa.push(['HASIL AKHIR KAS LACI', laciAkhir]);
+            summaryAoa.push(['Total Fee Bersih (Profit)', totalFeeBersih]);
+
+            // --- SHEET 2: RINCIAN TRANSAKSI ---
+            const trxChronological = [...targetTrx].reverse();
+            const trxAoa = [
+                ['No', 'Tanggal', 'Shift', 'Jenis Transaksi', 'Keterangan / Tujuan', 'Sumber Dana / Stok', 'Metode', 'Tujuan / Masuk', 'Qty Stok', 'Satuan', 'Nominal (Rp)', 'Biaya / Laba (Rp)', 'Admin Tunai', 'Fee Bersih (Rp)', 'Total Bayar / Terima (Rp)']
+            ];
+
+            trxChronological.forEach((trx, idx) => {
+                const isBongkar = (trx.type === 'Bongkar Chip Royal' || trx.type === 'Bongkar Chip HGI');
+                const chipName = trx.targetChipName || (trx.type === 'Bongkar Chip Royal' ? 'Chip Royal' : 'Chip HGI');
+                const tujuanMasuk = isBongkar ? `${chipName} (+${trx.qty} B)` : (trx.receiveName || '-');
+                const metode = trx.paymentMethod || '-';
+                const qtyVal = trx.qty ? Number(trx.qty) : 0;
+                const unitVal = trx.unit || (isBongkar ? 'B' : '');
+                const nomVal = Number(trx.nominal || 0);
+                const biayaVal = Number(trx.biaya || 0);
+                const feeVal = Number(trx.fee || 0);
+                const totalRowVal = isBongkar ? Math.max(0, nomVal - biayaVal) : (nomVal + biayaVal);
+
+                trxAoa.push([
+                    idx + 1,
+                    trx.date || '-',
+                    trx.shift || 'Shift 1',
+                    trx.type || '-',
+                    trx.desc || '-',
+                    trx.sourceName || '-',
+                    metode,
+                    tujuanMasuk,
+                    qtyVal,
+                    unitVal,
+                    nomVal,
+                    biayaVal,
+                    trx.adminTunai ? 'Ya' : 'Tidak',
+                    feeVal,
+                    totalRowVal
+                ]);
+            });
+
+            if (trxChronological.length > 0) {
+                const lastDataRow = trxChronological.length + 1;
+                trxAoa.push([
+                    '', 'TOTAL', '', '', '', '', '', '', '', '',
+                    { f: `SUM(K2:K${lastDataRow})` },
+                    { f: `SUM(L2:L${lastDataRow})` },
+                    '',
+                    { f: `SUM(N2:N${lastDataRow})` },
+                    { f: `SUM(O2:O${lastDataRow})` }
+                ]);
+            }
+
+            // --- SHEET 3: ARUS KAS LACI ---
+            const laciAoa = [
+                ['No', 'Tanggal', 'Shift', 'Jenis Transaksi', 'Keterangan', 'Uang Masuk Laci (Rp)', 'Uang Keluar Laci (Rp)']
+            ];
+            let laciRowIdx = 0;
+            trxChronological.forEach(trx => {
+                const masuk = getUangMasukLaci(trx);
+                const keluar = getUangKeluarLaci(trx);
+                if (masuk > 0 || keluar > 0) {
+                    laciRowIdx++;
+                    laciAoa.push([
+                        laciRowIdx,
+                        trx.date || '-',
+                        trx.shift || 'Shift 1',
+                        trx.type || '-',
+                        trx.desc || '-',
+                        masuk,
+                        keluar
+                    ]);
+                }
+            });
+            if (laciRowIdx > 0) {
+                const lastLaciRow = laciRowIdx + 1;
+                laciAoa.push([
+                    '', 'TOTAL ARUS LACI', '', '', '',
+                    { f: `SUM(F2:F${lastLaciRow})` },
+                    { f: `SUM(G2:G${lastLaciRow})` }
+                ]);
+            }
+
+            const safeBranch = branchName.replace(/[^a-zA-Z0-9_-]/g, '_');
+            const safeShift = shiftName.replace(/[^a-zA-Z0-9_-]/g, '_');
+            const fileName = `Laporan_BRILink_${safeBranch}_${safeShift}_${todayStr}.xlsx`;
+
+            if (typeof XLSX !== 'undefined') {
+                const wb = XLSX.utils.book_new();
+
+                const wsSummary = XLSX.utils.aoa_to_sheet(summaryAoa);
+                applyNumFormat(wsSummary, summaryAoa, [1, 2, 3, 4, 5]);
+                autoFitSheetColumns(wsSummary, summaryAoa);
+                XLSX.utils.book_append_sheet(wb, wsSummary, 'Ringkasan Laporan');
+
+                const wsTrx = XLSX.utils.aoa_to_sheet(trxAoa);
+                applyNumFormat(wsTrx, trxAoa, [10, 11, 13, 14]);
+                autoFitSheetColumns(wsTrx, trxAoa);
+                XLSX.utils.book_append_sheet(wb, wsTrx, 'Rincian Transaksi');
+
+                const wsLaci = XLSX.utils.aoa_to_sheet(laciAoa);
+                applyNumFormat(wsLaci, laciAoa, [5, 6]);
+                autoFitSheetColumns(wsLaci, laciAoa);
+                XLSX.utils.book_append_sheet(wb, wsLaci, 'Arus Kas Laci');
+
+                XLSX.writeFile(wb, fileName);
+                showToast(`File Excel "${fileName}" berhasil diunduh!`);
+            } else {
+                // Offline fallback: HTML table compatible with Excel (.xls)
+                const buildHtmlTable = (title, aoa) => {
+                    let h = `<h3>${title}</h3><table border="1" cellspacing="0" cellpadding="4">`;
+                    aoa.forEach((row, rIdx) => {
+                        h += '<tr>';
+                        row.forEach(cell => {
+                            const tag = rIdx === 0 ? 'th' : 'td';
+                            const val = (cell && typeof cell === 'object' && cell.f) ? '' : (cell ?? '');
+                            h += `<${tag}>${val}</${tag}>`;
+                        });
+                        h += '</tr>';
+                    });
+                    h += '</table><br/>';
+                    return h;
+                };
+                const htmlExcel = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"></head><body>` +
+                    buildHtmlTable('Ringkasan Laporan', summaryAoa) +
+                    buildHtmlTable('Rincian Transaksi', trxAoa) +
+                    buildHtmlTable('Arus Kas Laci', laciAoa) +
+                    `</body></html>`;
+                const blob = new Blob([htmlExcel], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileName.replace('.xlsx', '.xls');
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                showToast("File Excel berhasil diunduh!");
+            }
         }
 
         function copyShiftReport() {
