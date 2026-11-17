@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -52,7 +53,7 @@
                 <button onclick="toggleModal('configModal')" class="bg-blue-800 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-2 border border-blue-700">
                     <i class="fa-solid fa-gear"></i> Pengaturan
                 </button>
-                <button onclick="exportShiftExcel(false)" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition shadow flex items-center gap-2 border border-emerald-500">
+                <button onclick="openExportExcelModal(false)" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition shadow flex items-center gap-2 border border-emerald-500">
                     <i class="fa-solid fa-file-excel"></i> Export Excel
                 </button>
                 <button onclick="copyShiftReport()" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition shadow flex items-center gap-2">
@@ -204,7 +205,7 @@
             <div class="flex justify-between items-center p-5 border-b shrink-0">
                 <h3 class="text-xl font-bold text-slate-800"><i class="fa-solid fa-list-ul text-blue-600 mr-2"></i>Riwayat Transaksi</h3>
                 <div class="flex items-center gap-2 sm:gap-3">
-                    <button onclick="exportShiftExcel(true)" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-md transition font-medium shadow-sm flex items-center gap-1.5">
+                    <button onclick="openExportExcelModal(true)" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-md transition font-medium shadow-sm flex items-center gap-1.5">
                         <i class="fa-solid fa-file-excel"></i> Export Excel
                     </button>
                     <button onclick="openConfirmClearModal()" class="text-xs text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-md transition font-medium border border-red-200 flex items-center gap-1">
@@ -322,10 +323,14 @@
             </div>
             <div class="p-5 overflow-y-auto custom-scroll flex-grow space-y-6">
                 
-                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label class="block text-xs font-semibold text-blue-800 uppercase mb-1">Nama Cabang</label>
                         <input type="text" id="configBranch" placeholder="Masukkan nama cabang..." class="w-full px-3 py-2 bg-white border border-blue-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-600 font-medium outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-blue-800 uppercase mb-1">Nama Karyawan</label>
+                        <input type="text" id="configEmployee" placeholder="Masukkan nama karyawan..." class="w-full px-3 py-2 bg-white border border-blue-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-600 font-medium outline-none">
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-blue-800 uppercase mb-1">Shift Kerja</label>
@@ -379,6 +384,48 @@
                 <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Daftar Jenis Transaksi Aktif</h4>
                 <ul id="trxTypeList" class="space-y-2 border border-slate-100 rounded-lg p-2 bg-slate-50"></ul>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal Export Excel -->
+    <div id="exportExcelModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex justify-center items-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md modal-enter flex flex-col overflow-hidden">
+            <div class="flex justify-between items-center p-5 border-b bg-emerald-50/70">
+                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-file-excel text-emerald-600 text-xl"></i> Export Laporan Excel
+                </h3>
+                <button onclick="toggleModal('exportExcelModal')" class="text-slate-400 hover:text-red-500 transition"><i class="fa-solid fa-times text-xl"></i></button>
+            </div>
+            <form onsubmit="submitExportExcel(event)" class="p-5 space-y-4">
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <label for="exportExcelDate" class="block text-sm font-semibold text-slate-700">Pilih Tanggal Laporan</label>
+                        <button type="button" onclick="setExportAllDates()" class="text-xs text-emerald-700 hover:text-emerald-800 font-semibold bg-emerald-100/80 hover:bg-emerald-200/80 px-2 py-0.5 rounded transition">
+                            Semua Tanggal
+                        </button>
+                    </div>
+                    <input type="date" id="exportExcelDate" onchange="updateExportExcelPreview()" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-emerald-600 outline-none">
+                    <p class="text-[11px] text-slate-500 mt-1">*Kosongkan tanggal atau klik <b>Semua Tanggal</b> untuk mengekspor seluruh tanggal.</p>
+                </div>
+
+                <div>
+                    <label for="exportExcelShift" class="block text-sm font-semibold text-slate-700 mb-1">Pilih Shift Laporan</label>
+                    <select id="exportExcelShift" onchange="updateExportExcelPreview()" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-emerald-600 outline-none">
+                        <option value="">Semua Shift (Shift 1 & Shift 2)</option>
+                        <option value="Shift 1">Shift 1</option>
+                        <option value="Shift 2">Shift 2</option>
+                    </select>
+                </div>
+
+                <div id="exportExcelPreviewBox" class="p-3.5 rounded-lg border border-emerald-200 bg-emerald-50/70 text-xs space-y-1"></div>
+
+                <div class="pt-2 flex justify-end gap-2">
+                    <button type="button" onclick="toggleModal('exportExcelModal')" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-semibold transition">Batal</button>
+                    <button type="submit" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold shadow-md flex items-center gap-2 transition">
+                        <i class="fa-solid fa-download"></i> Download Excel (.xlsx)
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -445,8 +492,9 @@
         }
         let customTrxTypes = savedTrxTypes || defaultTrxTypes;
         let config = JSON.parse(localStorage.getItem('brilink_config_v15')) || { 
-            branchName: 'Kafka Cell', shift: 'Shift 1', saldo: {} 
+            branchName: 'Kafka Cell', employeeName: '', shift: 'Shift 1', saldo: {} 
         };
+        if (config.employeeName === undefined) config.employeeName = '';
         let transactions = JSON.parse(localStorage.getItem('brilink_transactions_v15')) || [];
 
         accounts.forEach(a => { if(config.saldo[a.id] === undefined) config.saldo[a.id] = 0; });
@@ -575,6 +623,7 @@
                 modal.classList.remove('hidden');
                 if (id === 'configModal') {
                     document.getElementById('configBranch').value = config.branchName || 'Kafka Cell';
+                    document.getElementById('configEmployee').value = config.employeeName || '';
                     document.getElementById('configShift').value = config.shift || 'Shift 1';
                     accounts.forEach(acc => {
                         const input = document.getElementById(`init_${acc.id}`);
@@ -787,9 +836,21 @@
             }
         }
 
+        function updateHeaderInfo() {
+            const branchText = config.branchName || 'Kafka Cell';
+            const empText = (config.employeeName || '').trim();
+            const shiftText = config.shift || 'Shift 1';
+            const headerEl = document.getElementById('headerInfo');
+            if (headerEl) {
+                headerEl.innerText = empText
+                    ? `Cabang: ${branchText} | Karyawan: ${empText} | Shift: ${shiftText}`
+                    : `Cabang: ${branchText} | Shift: ${shiftText}`;
+            }
+        }
+
         window.onload = () => {
             document.getElementById('trxDate').value = new Date().toISOString().slice(0, 10);
-            document.getElementById('headerInfo').innerText = `Cabang: ${config.branchName || 'Kafka Cell'} | Shift: ${config.shift || 'Shift 1'}`;
+            updateHeaderInfo();
 
             const uangCont = document.getElementById('configUangContainer');
             const voucherCont = document.getElementById('configVoucherContainer');
@@ -878,6 +939,7 @@
 
         function saveConfig() {
             config.branchName = document.getElementById('configBranch').value.trim() || 'Kafka Cell';
+            config.employeeName = document.getElementById('configEmployee').value.trim();
             config.shift = document.getElementById('configShift').value;
             accounts.forEach(acc => {
                 const rawVal = document.getElementById(`init_${acc.id}`).value;
@@ -885,7 +947,7 @@
                 config.saldo[acc.id] = isNaN(val) ? 0 : val;
             });
             localStorage.setItem('brilink_config_v15', JSON.stringify(config));
-            document.getElementById('headerInfo').innerText = `Cabang: ${config.branchName} | Shift: ${config.shift}`;
+            updateHeaderInfo();
             renderData();
             toggleModal('configModal');
             showToast("Pengaturan berhasil disimpan!");
@@ -916,7 +978,7 @@
             let trx = {
                 id: Date.now(),
                 date: document.getElementById('trxDate').value,
-                branch: config.branchName || 'Kafka Cell', shift: config.shift || 'Shift 1', type: trxType,
+                branch: config.branchName || 'Kafka Cell', employee: (config.employeeName || '').trim(), shift: config.shift || 'Shift 1', type: trxType,
                 desc: descFinal,
                 nominal: parseFormattedNumber(document.getElementById('trxNominal').value),
                 adminTunai: !!adminTunai,
@@ -1269,9 +1331,201 @@
             }
         }
 
-        function exportShiftExcel(useCurrentFilter = false) {
-            const targetTrx = useCurrentFilter ? getFilteredTransactions() : transactions;
-            const currentBalances = getCalculatedBalances([...transactions].reverse());
+        function openExportExcelModal(fromRiwayat = false) {
+            const dateInput = document.getElementById('exportExcelDate');
+            const shiftSelect = document.getElementById('exportExcelShift');
+            const todayStr = new Date().toISOString().slice(0, 10);
+
+            if (fromRiwayat) {
+                const rDate = document.getElementById('filterDate') ? document.getElementById('filterDate').value : '';
+                const rShift = document.getElementById('filterShift') ? document.getElementById('filterShift').value : '';
+                if (dateInput) dateInput.value = rDate || todayStr;
+                if (shiftSelect) shiftSelect.value = rShift || '';
+            } else {
+                if (dateInput) dateInput.value = todayStr;
+                if (shiftSelect) shiftSelect.value = config.shift || 'Shift 1';
+            }
+
+            updateExportExcelPreview();
+            toggleModal('exportExcelModal');
+        }
+
+        function setExportAllDates() {
+            const dateInput = document.getElementById('exportExcelDate');
+            if (dateInput) dateInput.value = '';
+            updateExportExcelPreview();
+        }
+
+        function getTransactionsByDateAndShift(selectedDate, selectedShift) {
+            return transactions.filter(t => {
+                const matchDate = !selectedDate || t.date === selectedDate;
+                const trxShift = t.shift || 'Shift 1';
+                const matchShift = !selectedShift || trxShift === selectedShift;
+                return matchDate && matchShift;
+            });
+        }
+
+        function isChipTransaction(trx) {
+            const tType = (trx.type || '').toLowerCase();
+            return trx.sourceType === 'chip' ||
+                trx.targetChipId === 'chip_royal' ||
+                trx.targetChipId === 'chip_hgi' ||
+                tType === 'chip royal' ||
+                tType === 'chip hgi' ||
+                tType === 'bongkar chip royal' ||
+                tType === 'bongkar chip hgi' ||
+                tType.includes('chip');
+        }
+
+        function isVoucherTransaction(trx) {
+            const tType = (trx.type || '').toLowerCase();
+            return trx.sourceType === 'voucher' ||
+                tType.startsWith('v.') ||
+                tType.startsWith('v ') ||
+                tType.includes('voucher');
+        }
+
+        function isGadaiTransaction(trx) {
+            const tType = (trx.type || '').toLowerCase();
+            return tType === 'terima gadai' ||
+                tType === 'tebus gadai' ||
+                tType.includes('gadai');
+        }
+
+        function isBiayaOperasionalTransaction(trx) {
+            const tType = (trx.type || '').toLowerCase();
+            return tType === 'biaya operasional' ||
+                tType.includes('operasional');
+        }
+
+        function categorizeTransactionsForExport(trxListChronological) {
+            const rincianTermasukVoucher = [];
+            const chipRoyalHgi = [];
+            const penjualanVoucher = [];
+            const barangGadai = [];
+            const biayaOperasional = [];
+
+            trxListChronological.forEach(trx => {
+                if (isChipTransaction(trx)) {
+                    chipRoyalHgi.push(trx);
+                } else if (isGadaiTransaction(trx)) {
+                    barangGadai.push(trx);
+                } else if (isBiayaOperasionalTransaction(trx)) {
+                    biayaOperasional.push(trx);
+                } else if (isVoucherTransaction(trx)) {
+                    penjualanVoucher.push(trx);
+                    rincianTermasukVoucher.push(trx);
+                } else {
+                    rincianTermasukVoucher.push(trx);
+                }
+            });
+
+            return {
+                rincianTermasukVoucher,
+                chipRoyalHgi,
+                penjualanVoucher,
+                barangGadai,
+                biayaOperasional
+            };
+        }
+
+        function sanitizeFilePart(str, fallback) {
+            const cleaned = (str || '')
+                .trim()
+                .replace(/[^a-zA-Z0-9_-]+/g, '_')
+                .replace(/_+/g, '_')
+                .replace(/^_|_$/g, '');
+            return cleaned || fallback;
+        }
+
+        function buildExportExcelFileName(selectedDate = '', selectedShift = '') {
+            const rawEmp = (config.employeeName || '').trim();
+            const safeShift = sanitizeFilePart(selectedShift || 'Semua_Shift', 'Semua_Shift');
+            const safeDate = sanitizeFilePart(selectedDate || 'Semua_Tanggal', 'Semua_Tanggal');
+
+            if (rawEmp) {
+                const safeEmp = sanitizeFilePart(rawEmp, 'Karyawan');
+                return `Laporan_BRILink_${safeEmp}_${safeShift}_${safeDate}.xlsx`;
+            } else {
+                const safeBranch = sanitizeFilePart(config.branchName || 'Kafka_Cell', 'Kafka_Cell');
+                return `Laporan_BRILink_${safeBranch}_${safeShift}_${safeDate}.xlsx`;
+            }
+        }
+
+        function updateExportExcelPreview() {
+            const previewBox = document.getElementById('exportExcelPreviewBox');
+            if (!previewBox) return;
+
+            const selectedDate = document.getElementById('exportExcelDate') ? document.getElementById('exportExcelDate').value : '';
+            const selectedShift = document.getElementById('exportExcelShift') ? document.getElementById('exportExcelShift').value : '';
+            const matched = getTransactionsByDateAndShift(selectedDate, selectedShift);
+            const cats = categorizeTransactionsForExport([...matched].reverse());
+
+            const empName = (config.employeeName || '').trim();
+            const empLabel = empName || 'Belum diatur (isi di Pengaturan)';
+            const dateLabel = selectedDate ? selectedDate : 'Semua Tanggal';
+            const shiftLabel = selectedShift ? selectedShift : 'Semua Shift';
+            const previewFileName = buildExportExcelFileName(selectedDate, selectedShift);
+            const totalNominal = matched.reduce((sum, t) => sum + (Number(t.nominal) || 0), 0);
+            const totalFee = matched.reduce((sum, t) => sum + (Number(t.fee) || 0), 0);
+
+            if (matched.length === 0) {
+                previewBox.className = "p-3.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-900 text-xs space-y-1";
+                previewBox.innerHTML = `
+                    <div class="font-bold flex items-center gap-1.5"><i class="fa-solid fa-circle-info text-amber-600"></i> Ringkasan Pilihan Export</div>
+                    <div>Karyawan: <b>${empLabel}</b></div>
+                    <div>Tanggal: <b>${dateLabel}</b> | Shift: <b>${shiftLabel}</b></div>
+                    <div class="pt-0.5">Nama File: <b class="break-all">${previewFileName}</b></div>
+                    <div class="text-amber-700 pt-0.5">Belum ada transaksi tercatat pada filter tanggal & shift ini (file tetap dapat diunduh).</div>
+                `;
+            } else {
+                previewBox.className = "p-3.5 rounded-lg border border-emerald-200 bg-emerald-50/70 text-emerald-950 text-xs space-y-1.5";
+                previewBox.innerHTML = `
+                    <div class="font-bold text-emerald-800 flex items-center gap-1.5"><i class="fa-solid fa-circle-check text-emerald-600"></i> Data Siap Diekspor (${matched.length} Transaksi)</div>
+                    <div>Karyawan: <b>${empLabel}</b></div>
+                    <div>Tanggal: <b>${dateLabel}</b> | Shift: <b>${shiftLabel}</b></div>
+                    <div>Nama File: <b class="text-emerald-800 break-all">${previewFileName}</b></div>
+                    <div class="flex flex-wrap gap-1.5 pt-1">
+                        <span class="bg-white px-2 py-0.5 rounded border border-emerald-200 text-[11px]">Rincian (inc. Voucher): <b>${cats.rincianTermasukVoucher.length}</b></span>
+                        <span class="bg-white px-2 py-0.5 rounded border border-purple-200 text-[11px]">Chip Royal & HGI: <b>${cats.chipRoyalHgi.length}</b></span>
+                        <span class="bg-white px-2 py-0.5 rounded border border-orange-200 text-[11px]">Voucher: <b>${cats.penjualanVoucher.length}</b></span>
+                        <span class="bg-white px-2 py-0.5 rounded border border-blue-200 text-[11px]">Gadai: <b>${cats.barangGadai.length}</b></span>
+                        <span class="bg-white px-2 py-0.5 rounded border border-rose-200 text-[11px]">Biaya Ops: <b>${cats.biayaOperasional.length}</b></span>
+                    </div>
+                    <div class="flex justify-between pt-1 border-t border-emerald-200/80">
+                        <span>Total Nominal: <b>${formatRp(totalNominal)}</b></span>
+                        <span>Total Fee Bersih: <b class="text-emerald-700">${formatRp(totalFee)}</b></span>
+                    </div>
+                `;
+            }
+        }
+
+        function submitExportExcel(e) {
+            e.preventDefault();
+            const selectedDate = document.getElementById('exportExcelDate') ? document.getElementById('exportExcelDate').value : '';
+            const selectedShift = document.getElementById('exportExcelShift') ? document.getElementById('exportExcelShift').value : '';
+            toggleModal('exportExcelModal');
+            exportShiftExcel(selectedDate, selectedShift);
+        }
+
+        function exportShiftExcel(selectedDate = '', selectedShift = '') {
+            const targetTrx = getTransactionsByDateAndShift(selectedDate, selectedShift);
+
+            // Calculate running balances up to the selected date & shift
+            const chronologicalAll = [...transactions].reverse();
+            const trxUpToPeriod = chronologicalAll.filter(t => {
+                if (!selectedDate) {
+                    if (!selectedShift) return true;
+                    return (t.shift || 'Shift 1') === selectedShift;
+                }
+                if (t.date < selectedDate) return true;
+                if (t.date > selectedDate) return false;
+                const trxShift = t.shift || 'Shift 1';
+                if (!selectedShift) return true;
+                if (selectedShift === 'Shift 1') return trxShift === 'Shift 1';
+                return trxShift === 'Shift 1' || trxShift === 'Shift 2';
+            });
+            const currentBalances = getCalculatedBalances(trxUpToPeriod);
 
             let laciMasuk = 0, laciKeluar = 0, laciBiaya = 0, laciChip = 0, totalFeeBersih = 0;
             targetTrx.forEach(trx => {
@@ -1293,17 +1547,22 @@
 
             const laciAwal = config.saldo['laci'] || 0;
             const laciAkhir = laciAwal + laciMasuk + laciChip + laciBiaya - laciKeluar;
-            const todayStr = new Date().toISOString().slice(0, 10);
             const branchName = config.branchName || 'Kafka Cell';
-            const shiftName = config.shift || 'Shift 1';
+            const employeeName = (config.employeeName || '').trim();
+            const dateDisplay = selectedDate || 'Semua Tanggal';
+            const shiftDisplay = selectedShift || 'Semua Shift';
+
+            const trxChronological = [...targetTrx].reverse();
+            const categorized = categorizeTransactionsForExport(trxChronological);
 
             // --- SHEET 1: RINGKASAN LAPORAN ---
             const summaryAoa = [
                 ['LAPORAN SHIFT BRILINK KAFKA CELL'],
                 ['Cabang', branchName],
-                ['Shift', shiftName],
-                ['Tanggal Laporan', todayStr],
-                ['Cakupan Data', useCurrentFilter ? `Sesuai Filter Riwayat (${targetTrx.length} transaksi)` : `Seluruh Transaksi (${targetTrx.length} transaksi)`],
+                ['Nama Karyawan', employeeName || '-'],
+                ['Shift', shiftDisplay],
+                ['Tanggal Laporan', dateDisplay],
+                ['Jumlah Transaksi', `${targetTrx.length} transaksi`],
                 [],
                 ['1. SALDO AKHIR KEUANGAN'],
                 ['No', 'Akun / Rekening', 'Saldo Awal (Rp)', 'Saldo Akhir (Rp)']
@@ -1357,24 +1616,42 @@
             summaryAoa.push(['Uang Keluar Tunai', laciKeluar]);
             summaryAoa.push(['HASIL AKHIR KAS LACI', laciAkhir]);
             summaryAoa.push(['Total Fee Bersih (Profit)', totalFeeBersih]);
+            summaryAoa.push([]);
 
-            // --- SHEET 2: RINCIAN TRANSAKSI ---
-            const trxChronological = [...targetTrx].reverse();
+            const calcCatStats = (arr) => ({
+                count: arr.length,
+                nominal: arr.reduce((s, t) => s + Number(t.nominal || 0), 0),
+                biaya: arr.reduce((s, t) => s + Number(t.biaya || 0), 0),
+                fee: arr.reduce((s, t) => s + Number(t.fee || 0), 0)
+            });
+            const statRincian = calcCatStats(categorized.rincianTermasukVoucher);
+            const statChip = calcCatStats(categorized.chipRoyalHgi);
+            const statVoucher = calcCatStats(categorized.penjualanVoucher);
+            const statGadai = calcCatStats(categorized.barangGadai);
+            const statOps = calcCatStats(categorized.biayaOperasional);
+
+            summaryAoa.push(['5. RINGKASAN PER SHEET KATEGORI']);
+            summaryAoa.push(['Nama Sheet / Kategori', 'Jumlah Trx', 'Total Nominal (Rp)', 'Total Biaya / Laba (Rp)', 'Total Fee Bersih (Rp)']);
+            summaryAoa.push(['Rincian Transaksi (Termasuk Voucher)', statRincian.count, statRincian.nominal, statRincian.biaya, statRincian.fee]);
+            summaryAoa.push(['Penjualan & Bongkar Chip Royal & HGI', statChip.count, statChip.nominal, statChip.biaya, statChip.fee]);
+            summaryAoa.push(['Penjualan Voucher (Khusus)', statVoucher.count, statVoucher.nominal, statVoucher.biaya, statVoucher.fee]);
+            summaryAoa.push(['Barang Gadai (Terima & Tebus)', statGadai.count, statGadai.nominal, statGadai.biaya, statGadai.fee]);
+            summaryAoa.push(['Biaya Operasional', statOps.count, statOps.nominal, statOps.biaya, statOps.fee]);
+
+            // --- SHEET 2: RINCIAN TRANSAKSI (TERMASUK VOUCHER) ---
             const trxAoa = [
                 ['No', 'Tanggal', 'Shift', 'Jenis Transaksi', 'Keterangan / Tujuan', 'Sumber Dana / Stok', 'Metode', 'Tujuan / Masuk', 'Qty Stok', 'Satuan', 'Nominal (Rp)', 'Biaya / Laba (Rp)', 'Admin Tunai', 'Fee Bersih (Rp)', 'Total Bayar / Terima (Rp)']
             ];
 
-            trxChronological.forEach((trx, idx) => {
-                const isBongkar = (trx.type === 'Bongkar Chip Royal' || trx.type === 'Bongkar Chip HGI');
-                const chipName = trx.targetChipName || (trx.type === 'Bongkar Chip Royal' ? 'Chip Royal' : 'Chip HGI');
-                const tujuanMasuk = isBongkar ? `${chipName} (+${trx.qty} B)` : (trx.receiveName || '-');
+            categorized.rincianTermasukVoucher.forEach((trx, idx) => {
+                const tujuanMasuk = trx.receiveName || '-';
                 const metode = trx.paymentMethod || '-';
                 const qtyVal = trx.qty ? Number(trx.qty) : 0;
-                const unitVal = trx.unit || (isBongkar ? 'B' : '');
+                const unitVal = trx.unit || '';
                 const nomVal = Number(trx.nominal || 0);
                 const biayaVal = Number(trx.biaya || 0);
                 const feeVal = Number(trx.fee || 0);
-                const totalRowVal = isBongkar ? Math.max(0, nomVal - biayaVal) : (nomVal + biayaVal);
+                const totalRowVal = nomVal + biayaVal;
 
                 trxAoa.push([
                     idx + 1,
@@ -1395,8 +1672,8 @@
                 ]);
             });
 
-            if (trxChronological.length > 0) {
-                const lastDataRow = trxChronological.length + 1;
+            if (categorized.rincianTermasukVoucher.length > 0) {
+                const lastDataRow = categorized.rincianTermasukVoucher.length + 1;
                 trxAoa.push([
                     '', 'TOTAL', '', '', '', '', '', '', '', '',
                     { f: `SUM(K2:K${lastDataRow})` },
@@ -1407,7 +1684,170 @@
                 ]);
             }
 
-            // --- SHEET 3: ARUS KAS LACI ---
+            // --- SHEET 3: PENJUALAN CHIP ROYAL & HGI ---
+            const chipAoa = [
+                ['No', 'Tanggal', 'Shift', 'Jenis Transaksi', 'Keterangan / ID', 'Sumber Dana / Stok', 'Metode', 'Tujuan / Masuk', 'Qty (B)', 'Satuan', 'Nominal (Rp)', 'Biaya / Laba (Rp)', 'Admin Tunai', 'Fee Bersih (Rp)', 'Total Bayar / Terima (Rp)']
+            ];
+
+            categorized.chipRoyalHgi.forEach((trx, idx) => {
+                const isBongkar = (trx.type === 'Bongkar Chip Royal' || trx.type === 'Bongkar Chip HGI');
+                const chipName = trx.targetChipName || (trx.type === 'Bongkar Chip Royal' ? 'Chip Royal' : 'Chip HGI');
+                const tujuanMasuk = isBongkar ? `${chipName} (+${trx.qty} B)` : (trx.receiveName || '-');
+                const metode = trx.paymentMethod || '-';
+                const qtyVal = trx.qty ? Number(trx.qty) : 0;
+                const unitVal = trx.unit || 'B';
+                const nomVal = Number(trx.nominal || 0);
+                const biayaVal = Number(trx.biaya || 0);
+                const feeVal = Number(trx.fee || 0);
+                const totalRowVal = isBongkar ? Math.max(0, nomVal - biayaVal) : (nomVal + biayaVal);
+
+                chipAoa.push([
+                    idx + 1,
+                    trx.date || '-',
+                    trx.shift || 'Shift 1',
+                    trx.type || '-',
+                    trx.desc || '-',
+                    trx.sourceName || '-',
+                    metode,
+                    tujuanMasuk,
+                    qtyVal,
+                    unitVal,
+                    nomVal,
+                    biayaVal,
+                    trx.adminTunai ? 'Ya' : 'Tidak',
+                    feeVal,
+                    totalRowVal
+                ]);
+            });
+
+            if (categorized.chipRoyalHgi.length > 0) {
+                const lastChipRow = categorized.chipRoyalHgi.length + 1;
+                chipAoa.push([
+                    '', 'TOTAL CHIP ROYAL & HGI', '', '', '', '', '', '',
+                    { f: `SUM(I2:I${lastChipRow})` },
+                    'B',
+                    { f: `SUM(K2:K${lastChipRow})` },
+                    { f: `SUM(L2:L${lastChipRow})` },
+                    '',
+                    { f: `SUM(N2:N${lastChipRow})` },
+                    { f: `SUM(O2:O${lastChipRow})` }
+                ]);
+            }
+
+            // --- SHEET 4: PENJUALAN VOUCHER ---
+            const voucherAoa = [
+                ['No', 'Tanggal', 'Shift', 'Jenis Voucher', 'Keterangan / Tujuan', 'Stok Voucher', 'Metode Bayar', 'Tujuan / Masuk', 'Qty (Pcs)', 'Satuan', 'Nominal (Rp)', 'Biaya / Laba (Rp)', 'Admin Tunai', 'Fee Bersih (Rp)', 'Total Bayar (Rp)']
+            ];
+
+            categorized.penjualanVoucher.forEach((trx, idx) => {
+                const qtyVal = trx.qty ? Number(trx.qty) : 0;
+                const nomVal = Number(trx.nominal || 0);
+                const biayaVal = Number(trx.biaya || 0);
+                const feeVal = Number(trx.fee || 0);
+                const totalRowVal = nomVal + biayaVal;
+
+                voucherAoa.push([
+                    idx + 1,
+                    trx.date || '-',
+                    trx.shift || 'Shift 1',
+                    trx.type || '-',
+                    trx.desc || '-',
+                    trx.sourceName || '-',
+                    trx.paymentMethod || '-',
+                    trx.receiveName || '-',
+                    qtyVal,
+                    trx.unit || 'Pcs',
+                    nomVal,
+                    biayaVal,
+                    trx.adminTunai ? 'Ya' : 'Tidak',
+                    feeVal,
+                    totalRowVal
+                ]);
+            });
+
+            if (categorized.penjualanVoucher.length > 0) {
+                const lastVoucherRow = categorized.penjualanVoucher.length + 1;
+                voucherAoa.push([
+                    '', 'TOTAL PENJUALAN VOUCHER', '', '', '', '', '', '',
+                    { f: `SUM(I2:I${lastVoucherRow})` },
+                    'Pcs',
+                    { f: `SUM(K2:K${lastVoucherRow})` },
+                    { f: `SUM(L2:L${lastVoucherRow})` },
+                    '',
+                    { f: `SUM(N2:N${lastVoucherRow})` },
+                    { f: `SUM(O2:O${lastVoucherRow})` }
+                ]);
+            }
+
+            // --- SHEET 5: BARANG GADAI ---
+            const gadaiAoa = [
+                ['No', 'Tanggal', 'Shift', 'Jenis Gadai', 'Keterangan / Barang & Nasabah', 'Sumber Dana (Terima Gadai)', 'Metode', 'Tujuan / Masuk (Tebus Gadai)', 'Pokok Gadai (Rp)', 'Jasa / Biaya Gadai (Rp)', 'Admin Tunai', 'Fee Bersih (Rp)', 'Total (Rp)']
+            ];
+
+            categorized.barangGadai.forEach((trx, idx) => {
+                const isTerima = (trx.type || '').toLowerCase() === 'terima gadai';
+                const nomVal = Number(trx.nominal || 0);
+                const biayaVal = Number(trx.biaya || 0);
+                const feeVal = Number(trx.fee || 0);
+                const totalRowVal = nomVal + biayaVal;
+
+                gadaiAoa.push([
+                    idx + 1,
+                    trx.date || '-',
+                    trx.shift || 'Shift 1',
+                    trx.type || '-',
+                    trx.desc || '-',
+                    isTerima ? (trx.sourceName || '-') : '-',
+                    isTerima ? (trx.sourceId === 'laci' ? 'Tunai' : 'Transfer') : (trx.paymentMethod || '-'),
+                    isTerima ? '-' : (trx.receiveName || '-'),
+                    nomVal,
+                    biayaVal,
+                    trx.adminTunai ? 'Ya' : 'Tidak',
+                    feeVal,
+                    totalRowVal
+                ]);
+            });
+
+            if (categorized.barangGadai.length > 0) {
+                const lastGadaiRow = categorized.barangGadai.length + 1;
+                gadaiAoa.push([
+                    '', 'TOTAL BARANG GADAI', '', '', '', '', '', '',
+                    { f: `SUM(I2:I${lastGadaiRow})` },
+                    { f: `SUM(J2:J${lastGadaiRow})` },
+                    '',
+                    { f: `SUM(L2:L${lastGadaiRow})` },
+                    { f: `SUM(M2:M${lastGadaiRow})` }
+                ]);
+            }
+
+            // --- SHEET 6: BIAYA OPERASIONAL ---
+            const opsAoa = [
+                ['No', 'Tanggal', 'Shift', 'Jenis Transaksi', 'Keterangan Pengeluaran', 'Metode', 'Sumber Dana Terpotong', 'Nominal Pengeluaran (Rp)']
+            ];
+
+            categorized.biayaOperasional.forEach((trx, idx) => {
+                const nomVal = Number(trx.nominal || 0);
+                opsAoa.push([
+                    idx + 1,
+                    trx.date || '-',
+                    trx.shift || 'Shift 1',
+                    trx.type || 'Biaya Operasional',
+                    trx.desc || '-',
+                    trx.paymentMethod || (trx.sourceId === 'laci' ? 'Tunai' : 'Transfer'),
+                    trx.sourceName || 'Kas Laci',
+                    nomVal
+                ]);
+            });
+
+            if (categorized.biayaOperasional.length > 0) {
+                const lastOpsRow = categorized.biayaOperasional.length + 1;
+                opsAoa.push([
+                    '', 'TOTAL BIAYA OPERASIONAL', '', '', '', '', '',
+                    { f: `SUM(H2:H${lastOpsRow})` }
+                ]);
+            }
+
+            // --- SHEET 7: ARUS KAS LACI ---
             const laciAoa = [
                 ['No', 'Tanggal', 'Shift', 'Jenis Transaksi', 'Keterangan', 'Uang Masuk Laci (Rp)', 'Uang Keluar Laci (Rp)']
             ];
@@ -1437,9 +1877,7 @@
                 ]);
             }
 
-            const safeBranch = branchName.replace(/[^a-zA-Z0-9_-]/g, '_');
-            const safeShift = shiftName.replace(/[^a-zA-Z0-9_-]/g, '_');
-            const fileName = `Laporan_BRILink_${safeBranch}_${safeShift}_${todayStr}.xlsx`;
+            const fileName = buildExportExcelFileName(selectedDate, selectedShift);
 
             if (typeof XLSX !== 'undefined') {
                 const wb = XLSX.utils.book_new();
@@ -1453,6 +1891,26 @@
                 applyNumFormat(wsTrx, trxAoa, [10, 11, 13, 14]);
                 autoFitSheetColumns(wsTrx, trxAoa);
                 XLSX.utils.book_append_sheet(wb, wsTrx, 'Rincian Transaksi');
+
+                const wsChip = XLSX.utils.aoa_to_sheet(chipAoa);
+                applyNumFormat(wsChip, chipAoa, [10, 11, 13, 14]);
+                autoFitSheetColumns(wsChip, chipAoa);
+                XLSX.utils.book_append_sheet(wb, wsChip, 'Chip Royal & HGI');
+
+                const wsVoucher = XLSX.utils.aoa_to_sheet(voucherAoa);
+                applyNumFormat(wsVoucher, voucherAoa, [10, 11, 13, 14]);
+                autoFitSheetColumns(wsVoucher, voucherAoa);
+                XLSX.utils.book_append_sheet(wb, wsVoucher, 'Penjualan Voucher');
+
+                const wsGadai = XLSX.utils.aoa_to_sheet(gadaiAoa);
+                applyNumFormat(wsGadai, gadaiAoa, [8, 9, 11, 12]);
+                autoFitSheetColumns(wsGadai, gadaiAoa);
+                XLSX.utils.book_append_sheet(wb, wsGadai, 'Barang Gadai');
+
+                const wsOps = XLSX.utils.aoa_to_sheet(opsAoa);
+                applyNumFormat(wsOps, opsAoa, [7]);
+                autoFitSheetColumns(wsOps, opsAoa);
+                XLSX.utils.book_append_sheet(wb, wsOps, 'Biaya Operasional');
 
                 const wsLaci = XLSX.utils.aoa_to_sheet(laciAoa);
                 applyNumFormat(wsLaci, laciAoa, [5, 6]);
@@ -1479,7 +1937,11 @@
                 };
                 const htmlExcel = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"></head><body>` +
                     buildHtmlTable('Ringkasan Laporan', summaryAoa) +
-                    buildHtmlTable('Rincian Transaksi', trxAoa) +
+                    buildHtmlTable('Rincian Transaksi (Termasuk Voucher)', trxAoa) +
+                    buildHtmlTable('Penjualan & Bongkar Chip Royal & HGI', chipAoa) +
+                    buildHtmlTable('Penjualan Voucher', voucherAoa) +
+                    buildHtmlTable('Barang Gadai', gadaiAoa) +
+                    buildHtmlTable('Biaya Operasional', opsAoa) +
                     buildHtmlTable('Arus Kas Laci', laciAoa) +
                     `</body></html>`;
                 const blob = new Blob([htmlExcel], { type: 'application/vnd.ms-excel;charset=utf-8;' });
@@ -1519,7 +1981,11 @@
             let laciAkhir = laciAwal + laciMasuk + laciChip + laciBiaya - laciKeluar;
 
             let text = `*LAPORAN SHIFT BRILINK KAFKA CELL*\n`;
-            text += `Cabang: ${config.branchName || 'Kafka Cell'}\nShift: ${config.shift || 'Shift 1'}\n`;
+            text += `Cabang: ${config.branchName || 'Kafka Cell'}\n`;
+            if ((config.employeeName || '').trim()) {
+                text += `Karyawan: ${config.employeeName.trim()}\n`;
+            }
+            text += `Shift: ${config.shift || 'Shift 1'}\n`;
             text += `Tanggal: ${new Date().toISOString().slice(0, 10)}\n\n`;
 
             text += `*SALDO AKHIR KEUANGAN*\n`;
@@ -1592,4 +2058,3 @@
     </script>
 </body>
 </html>
-```
